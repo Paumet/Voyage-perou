@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pérou — Septembre 2026</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #191919; font-family: 'Inter', -apple-system, sans-serif; color: #e8e3d6; min-height: 100vh; }
+  .container { max-width: 720px; margin: 0 auto; padding: 32px 24px; }
+  .header { text-align: center; margin-bottom: 28px; }
+  .title { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 22px; font-weight: 500; letter-spacing: 0.15em; text-transform: uppercase; color: #7ca582; margin-bottom: 16px; }
+  .countdown { font-family: 'Cormorant Garamond', serif; font-size: 68px; font-weight: 500; color: #ede7d6; line-height: 1; margin-bottom: 8px; letter-spacing: 0.02em; }
+  .countdown-label { font-size: 11px; color: #7ca582; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 22px; }
+  .progress { width: 100%; max-width: 280px; margin: 0 auto; height: 4px; background: #242424; border-radius: 2px; overflow: hidden; }
+  .progress-bar { height: 100%; background: linear-gradient(90deg, #4a7c4e, #7ca582); width: 0%; transition: width 1.2s ease; }
+  #map { height: 380px; width: 100%; border-radius: 14px; margin-bottom: 20px; border: 1px solid rgba(91, 138, 95, 0.18); background: #191919; }
+  .map-error { height: 380px; border-radius: 14px; background: #1d2a1d; border: 1px solid rgba(91, 138, 95, 0.18); display: flex; align-items: center; justify-content: center; color: #7ca582; font-size: 13px; margin-bottom: 20px; text-align: center; padding: 24px; }
+  .stops { display: flex; flex-direction: column; gap: 8px; }
+  .stop { background: linear-gradient(135deg, #1d2a1d 0%, #1a241a 100%); border: 1px solid rgba(91, 138, 95, 0.15); border-radius: 12px; padding: 14px 18px; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 16px; }
+  .stop:hover { border-color: #4a7c4e; transform: translateY(-1px); }
+  .stop.active { border-color: #7ca582; background: linear-gradient(135deg, #243424 0%, #1f2a1f 100%); }
+  .stop-emoji { font-size: 22px; width: 32px; text-align: center; }
+  .stop-info { flex: 1; }
+  .stop-name { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 19px; color: #ede7d6; margin-bottom: 2px; }
+  .stop-meta { font-size: 11px; color: #7ca582; letter-spacing: 0.05em; }
+  .stop-days { font-family: 'Cormorant Garamond', serif; font-size: 17px; color: #4a7c4e; font-style: italic; font-weight: 500; }
+  .leaflet-popup-content-wrapper { background: #1d2a1d; color: #e8e3d6; border-radius: 8px; border: 1px solid rgba(91, 138, 95, 0.3); }
+  .leaflet-popup-content { margin: 12px 16px; font-family: 'Inter', sans-serif; font-size: 13px; line-height: 1.5; }
+  .leaflet-popup-tip { background: #1d2a1d; }
+  .leaflet-container a.leaflet-popup-close-button { color: #7ca582; }
+  .leaflet-control-attribution { background: rgba(25, 25, 25, 0.75) !important; color: #7ca582 !important; font-size: 10px !important; }
+  .leaflet-control-attribution a { color: #7ca582 !important; }
+  .leaflet-control-zoom a { background: #1d2a1d !important; color: #7ca582 !important; border-color: rgba(91, 138, 95, 0.3) !important; }
+  @media (max-width: 480px) {
+    .container { padding: 24px 16px; }
+    .countdown { font-size: 56px; }
+    .stop-name { font-size: 17px; }
+    #map { height: 320px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="title">Pérou — Septembre 2026</div>
+    <div class="countdown" id="countdown">—</div>
+    <div class="countdown-label" id="countdownLabel">jours avant le départ</div>
+    <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+  </div>
+  <div id="map"></div>
+  <div class="stops" id="stops"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// ---- ÉDITE ICI les dates si elles changent ----
+const DEPART = new Date(2026, 8, 1);   // 1er sept 2026 (mois: 0=jan ... 8=sept)
+const RETOUR = new Date(2026, 8, 28);  // 28 sept 2026
+// -----------------------------------------------
+
+const stops = [
+  { name: "Lima", region: "Côte pacifique", dates: "1–3 sept", days: 3, emoji: "🌊", coords: [-12.0464, -77.0428], note: "Acclimatation, ceviche, Miraflores & Barranco" },
+  { name: "Cordillera Blanca", region: "Huaraz", dates: "4–10 sept", days: 7, emoji: "🏔️", coords: [-9.5278, -77.5276], note: "Trek d'altitude — Lagunas 69, Santa Cruz" },
+  { name: "Sacred Valley & Cusco", region: "Andes", dates: "11–14 sept", days: 4, emoji: "🌄", coords: [-13.5320, -71.9675], note: "Acclimatation pré-trek, Ollantaytambo, Pisac" },
+  { name: "Salkantay Trek", region: "Machu Picchu", dates: "15–19 sept", days: 5, emoji: "⛰️", coords: [-13.1631, -72.5450], note: "5 jours, alternative à l'Inca Trail" },
+  { name: "Lac Titicaca", region: "Puno", dates: "20–22 sept", days: 3, emoji: "💧", coords: [-15.8402, -70.0219], note: "Îles Uros, Taquile, plus haut lac navigable au monde" },
+  { name: "Arequipa & Colca", region: "Sud andin", dates: "23–28 sept", days: 6, emoji: "🌋", coords: [-16.4090, -71.5375], note: "Ville blanche, canyon, vol des condors" },
+];
+
+function updateCountdown() {
+  const now = new Date();
+  const cd = document.getElementById('countdown');
+  const lbl = document.getElementById('countdownLabel');
+  const bar = document.getElementById('progressBar');
+  if (now < DEPART) {
+    const days = Math.ceil((DEPART - now) / 86400000);
+    cd.textContent = "J − " + days;
+    lbl.textContent = days > 1 ? "jours avant le départ" : "jour avant le départ";
+    const ref = new Date(2026, 0, 1);
+    const pct = Math.max(0, Math.min(100, ((now - ref) / (DEPART - ref)) * 100));
+    bar.style.width = pct + "%";
+  } else if (now <= RETOUR) {
+    const dayIdx = Math.floor((now - DEPART) / 86400000) + 1;
+    const total = Math.ceil((RETOUR - DEPART) / 86400000) + 1;
+    cd.textContent = "Jour " + dayIdx;
+    lbl.textContent = "sur place / " + total;
+    bar.style.width = Math.min(100, (dayIdx / total) * 100) + "%";
+  } else {
+    cd.textContent = "✓";
+    lbl.textContent = "voyage terminé";
+    bar.style.width = "100%";
+  }
+}
+
+function buildStops() {
+  const stopsEl = document.getElementById('stops');
+  stops.forEach((s, i) => {
+    const el = document.createElement('div');
+    el.className = 'stop';
+    el.dataset.index = i;
+    el.innerHTML =
+      '<div class="stop-emoji">' + s.emoji + '</div>' +
+      '<div class="stop-info"><div class="stop-name">' + s.name + '</div><div class="stop-meta">' + s.dates + ' · ' + s.region + '</div></div>' +
+      '<div class="stop-days">' + s.days + 'j</div>';
+    stopsEl.appendChild(el);
+  });
+}
+
+function initMap() {
+  if (typeof L === 'undefined') {
+    const mapDiv = document.getElementById('map');
+    if (mapDiv) {
+      mapDiv.outerHTML = '<div class="map-error">La librairie cartographique n\'a pas pu charger. Vérifie la connexion ou recharge la page.</div>';
+    }
+    return;
+  }
+  const map = L.map('map', { zoomControl: true, scrollWheelZoom: false });
+  map.setView([-13.0, -73.0], 5);
+  const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap, © CARTO',
+    subdomains: 'abcd',
+    maxZoom: 19,
+  });
+  tiles.on('tileerror', function() {
+    // Fallback OSM si CartoDB est bloqué
+    map.removeLayer(tiles);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 19,
+    }).addTo(map);
+  });
+  tiles.addTo(map);
+  const icon = L.divIcon({
+    className: 'custom-marker',
+    html: '<div style="width:14px;height:14px;border-radius:50%;background:#4a7c4e;border:2px solid #b0d4b3;box-shadow:0 0 10px rgba(122,165,130,0.7);"></div>',
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  });
+  const markers = stops.map(s => {
+    const m = L.marker(s.coords, { icon: icon }).addTo(map);
+    m.bindPopup(
+      '<strong style="color:#7ca582;font-size:14px;">' + s.emoji + ' ' + s.name + '</strong>' +
+      '<br><span style="color:#b0c4b0;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;">' + s.dates + ' · ' + s.region + '</span>' +
+      '<br><span style="margin-top:6px;display:block;color:#d8d0bd;">' + s.note + '</span>'
+    );
+    return m;
+  });
+  const route = L.polyline(stops.map(s => s.coords), { color: '#4a7c4e', weight: 2, opacity: 0.7, dashArray: '6, 6' }).addTo(map);
+  map.fitBounds(route.getBounds(), { padding: [40, 40] });
+  // Force le recalcul après que l'iframe ait sa taille définitive
+  setTimeout(() => map.invalidateSize(), 100);
+  setTimeout(() => map.invalidateSize(), 500);
+  window.addEventListener('resize', () => map.invalidateSize());
+  document.querySelectorAll('.stop').forEach(el => {
+    el.addEventListener('click', () => {
+      const i = parseInt(el.dataset.index, 10);
+      document.querySelectorAll('.stop.active').forEach(e => e.classList.remove('active'));
+      el.classList.add('active');
+      map.flyTo(stops[i].coords, 8, { duration: 1.4 });
+      setTimeout(() => markers[i].openPopup(), 1100);
+    });
+  });
+}
+
+function start() {
+  updateCountdown();
+  buildStops();
+  initMap();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', start);
+} else {
+  start();
+}
+</script>
+</body>
+</html>
